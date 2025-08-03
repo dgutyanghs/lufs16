@@ -34,7 +34,7 @@ jobs:
         mkdir -p assets
         if [ ! -f "assets/icon.png" ]; then
           echo "Creating placeholder icon..."
-          python3 -c '
+          cat > create_icon.py << 'PYTHON_SCRIPT'
 import sys
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -57,7 +57,9 @@ try:
 except ImportError:
     print("PIL not available, skipping icon creation")
     sys.exit(0)
-' || echo "Icon creation failed, using default"
+PYTHON_SCRIPT
+          python3 create_icon.py || echo "Icon creation failed, using default"
+          rm -f create_icon.py
         fi
       
     - name: Build macOS app
@@ -82,7 +84,7 @@ except ImportError:
         
     - name: Create installation guide
       run: |
-        cat > dist/macOS-Installation-Guide.md << 'EOF'
+        cat > dist/macOS-Installation-Guide.md << 'GUIDE_EOF'
         # macOS Installation Guide
         
         ## Files Included
@@ -108,7 +110,7 @@ except ImportError:
         - Supports Intel and Apple Silicon Macs
         
         Built on: $(date)
-        EOF
+        GUIDE_EOF
         
     - name: Upload installation guide
       uses: actions/upload-artifact@v4

@@ -1,0 +1,33 @@
+# 使用包含macOS构建工具的Docker镜像
+FROM electronuserland/builder:wine-mono
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制package文件
+COPY package*.json ./
+
+# 安装依赖
+RUN npm install
+
+# 复制源代码
+COPY . .
+
+# 创建简单图标
+RUN mkdir -p assets && \
+    echo "Creating placeholder icon..." && \
+    python3 -c "
+from PIL import Image, ImageDraw
+import os
+img = Image.new('RGB', (512, 512), '#4facfe')
+draw = ImageDraw.Draw(img)
+draw.rectangle([150, 180, 362, 332], fill='white')
+draw.polygon([(220, 220), (220, 292), (280, 256)], fill='#4facfe')
+img.save('assets/icon.png')
+" || echo "Using default icon"
+
+# 构建macOS版本
+RUN npm run build-mac
+
+# 输出构建结果
+CMD ["ls", "-la", "dist/"]

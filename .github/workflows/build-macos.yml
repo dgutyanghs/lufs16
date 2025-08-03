@@ -1,0 +1,113 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Create icon (if needed)
+      run: |
+        mkdir -p assets
+        if [ ! -f "assets/icon.png" ]; then
+          echo "Creating placeholder icon..."
+          # Create a simple colored square as icon
+          python3 -c "
+from PIL import Image, ImageDraw, ImageFont
+import os
+
+img = Image.new('RGBA', (512, 512), (0, 0, 0, 0))
+draw = ImageDraw.Draw(img)
+draw.rounded_rectangle([50, 50, 462, 462], radius=50, fill='#4facfe')
+draw.rounded_rectangle([150, 180, 362, 332], radius=8, fill='white')
+draw.polygon([(220, 220), (220, 292), (280, 256)], fill='#4facfe')
+
+try:
+    font = ImageFont.truetype('/System/Library/Fonts/Arial.ttf', 24)
+except:
+    font = ImageFont.load_default()
+
+text = 'HEVC'
+bbox = draw.textbbox((0, 0), text, font=font)
+text_width = bbox[2] - bbox[0]
+x = (512 - text_width) // 2
+draw.text((x, 380), text, fill='white', font=font)
+
+img.save('assets/icon.png')
+print('Icon created successfully')
+" || echo "Icon creation failed, using default"
+        fi
+      
+    - name: Build macOS app
+      run: npm run build-mac
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: List build outputs
+      run: |
+        echo "Build outputs:"
+        ls -la dist/
+        
+    - name: Upload macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-builds
+        path: |
+          dist/*.zip
+          dist/*.tar.gz
+          dist/*.dmg
+        retention-days: 30
+        
+    - name: Create installation guide
+      run: |
+        cat > dist/macOS-Installation-Guide.md << 'EOF'
+        # macOS Installation Guide
+        
+        ## Files Included
+        - Intel Mac: HEVC音频响度调节器-1.0.0-x64.zip
+        - Apple Silicon Mac: HEVC音频响度调节器-1.0.0-arm64.zip
+        - DMG files (if available): *.dmg
+        
+        ## Installation Steps
+        1. Download the appropriate file for your Mac
+        2. Extract the ZIP file or mount the DMG
+        3. Drag the app to Applications folder
+        4. Launch from Launchpad or Applications folder
+        
+        ## First Launch
+        If you see a security warning:
+        1. Go to System Preferences > Security & Privacy
+        2. Click "Open Anyway" for the blocked app
+        
+        ## Features
+        - Maintains HEVC encoding and MP4 format
+        - Professional LUFS audio analysis
+        - Built-in FFmpeg (no installation required)
+        - Supports Intel and Apple Silicon Macs
+        
+        Built on: $(date)
+        EOF
+        
+    - name: Upload installation guide
+      uses: actions/upload-artifact@v4
+      with:
+        name: installation-guide
+        path: dist/macOS-Installation-Guide.md

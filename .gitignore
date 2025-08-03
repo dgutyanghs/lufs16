@@ -1,0 +1,173 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+out/
+release/
+
+# Electron
+app/
+*.dmg
+*.zip
+*.tar.gz
+*.exe
+*.deb
+*.rpm
+*.AppImage
+
+# Cache directories
+.npm
+.yarn
+.cache/
+.electron/
+.electron-builder/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Temporary folders
+tmp/
+temp/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# parcel-bundler cache (https://parceljs.org/)
+.parcel-cache/
+
+# next.js build output
+.next
+
+# nuxt.js build output
+.nuxt
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# FFmpeg binaries (if downloaded separately)
+ffmpeg
+ffprobe
+ffmpeg.exe
+ffprobe.exe
+
+# Generated icons
+assets/icon.png
+
+# Test files
+test-videos/
+sample-files/
+
+# Documentation build
+docs/_build/
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Lock files (keep package-lock.json but ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Local development
+.local
+.vscode/settings.json
+
+# macOS specific
+*.dmg.blockmap
+
+# Windows specific
+*.exe.blockmap
+
+# Linux specific
+*.AppImage.blockmap
+
+# Electron builder
+builder-effective-config.yaml
+builder-debug.yml

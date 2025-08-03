@@ -4,218 +4,244 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>视频音频响度调节器</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .upload-area {
-            border: 2px dashed #ccc;
-            border-radius: 10px;
-            padding: 40px;
-            text-align: center;
-            margin-bottom: 20px;
-            transition: border-color 0.3s;
-        }
-
-        .upload-area:hover {
-            border-color: #007bff;
-        }
-
-        .upload-area.dragover {
-            border-color: #007bff;
-            background-color: #f0f8ff;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
-        .btn {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
-        }
-
-        .btn:hover {
-            background-color: #0056b3;
-        }
-
-        .btn:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-
-        .progress {
-            width: 100%;
-            height: 20px;
-            background-color: #f0f0f0;
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-
-        .progress-bar {
-            height: 100%;
-            background-color: #007bff;
-            width: 0%;
-            transition: width 0.3s;
-        }
-
-        .info-panel {
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 10px 0;
-        }
-
-        .hidden {
-            display: none;
-        }
-    </style>
+    <title>HEVC视频音频响度调节器</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <div class="container">
-        <h1>视频音频响度调节器</h1>
-        <p>上传视频文件，自动将音频响度调节到 -16 LUFS</p>
+    <div class="app-container">
+        <!-- 标题栏 -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1>🎬 HEVC视频音频响度调节器</h1>
+                <p>专业级音频响度标准化工具 - 保持HEVC编码和MP4格式</p>
+            </div>
+            <div class="header-actions">
+                <button id="aboutBtn" class="btn btn-secondary">关于</button>
+                <button id="settingsBtn" class="btn btn-secondary">设置</button>
+            </div>
+        </header>
 
-        <div id="loadingStatus" class="info-panel">
-            <h3>正在加载...</h3>
-            <p id="loadingText">正在加载FFmpeg.js库，请稍候...</p>
-        </div>
-
-        <div class="upload-area" id="uploadArea">
-            <p>拖拽视频文件到这里或点击选择文件</p>
-            <button class="btn" onclick="document.getElementById('fileInput').click()">选择视频文件</button>
-            <input type="file" id="fileInput" accept="video/*">
-        </div>
-
-        <div id="processingPanel" class="hidden">
-            <div class="info-panel">
-                <h3>处理进度</h3>
-                <div class="progress">
-                    <div class="progress-bar" id="progressBar"></div>
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 文件选择区域 -->
+            <section class="file-section">
+                <div class="file-drop-zone" id="fileDropZone">
+                    <div class="drop-zone-content">
+                        <div class="drop-icon">📁</div>
+                        <h3>选择或拖拽视频文件</h3>
+                        <p>支持 MP4, MOV, MKV, AVI 等格式</p>
+                        <button id="selectFileBtn" class="btn btn-primary">选择文件</button>
+                    </div>
                 </div>
-                <p id="statusText">准备中...</p>
-            </div>
 
-            <div id="audioInfo" class="info-panel hidden">
-                <h3>音频分析结果</h3>
-                <p>原始响度: <span id="originalLUFS">--</span> LUFS</p>
-                <p>目标响度: -16 LUFS</p>
-                <p>增益调节: <span id="gainAdjustment">--</span> dB</p>
-                <p>峰值电平: <span id="peakLevel">--</span> dBFS</p>
-                <p>动态范围: <span id="dynamicRange">--</span> LU</p>
-            </div>
-        </div>
+                <!-- 文件信息显示 -->
+                <div id="fileInfo" class="file-info hidden">
+                    <div class="file-details">
+                        <h3>📋 文件信息</h3>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>文件名:</label>
+                                <span id="fileName">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>文件大小:</label>
+                                <span id="fileSize">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>时长:</label>
+                                <span id="fileDuration">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>视频编码:</label>
+                                <span id="videoCodec">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>分辨率:</label>
+                                <span id="videoResolution">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>音频编码:</label>
+                                <span id="audioCodec">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
-        <div id="resultPanel" class="hidden">
-            <h3>处理完成</h3>
-            <video id="resultVideo" controls style="width: 100%; max-width: 600px;"></video>
-            <br>
-            <button class="btn" id="downloadBtn">下载处理后的视频</button>
-            <button class="btn" onclick="location.reload()">重新开始</button>
+            <!-- 音频分析区域 -->
+            <section id="analysisSection" class="analysis-section hidden">
+                <div class="section-header">
+                    <h3>🔍 音频响度分析</h3>
+                    <button id="analyzeBtn" class="btn btn-primary">开始分析</button>
+                </div>
+
+                <div id="analysisResults" class="analysis-results hidden">
+                    <div class="results-grid">
+                        <div class="result-item">
+                            <label>当前响度 (LUFS):</label>
+                            <span id="currentLUFS" class="value">--</span>
+                        </div>
+                        <div class="result-item">
+                            <label>峰值电平 (dBTP):</label>
+                            <span id="peakLevel" class="value">--</span>
+                        </div>
+                        <div class="result-item">
+                            <label>响度范围 (LU):</label>
+                            <span id="loudnessRange" class="value">--</span>
+                        </div>
+                        <div class="result-item">
+                            <label>目标响度:</label>
+                            <span class="value target">-16 LUFS</span>
+                        </div>
+                        <div class="result-item">
+                            <label>需要调节:</label>
+                            <span id="adjustmentNeeded" class="value">--</span>
+                        </div>
+                        <div class="result-item status-item">
+                            <label>状态:</label>
+                            <span id="analysisStatus" class="status">--</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 处理设置区域 -->
+            <section id="settingsSection" class="settings-section hidden">
+                <div class="section-header">
+                    <h3>⚙️ 处理设置</h3>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="setting-group">
+                        <label for="targetLUFS">目标响度 (LUFS):</label>
+                        <input type="number" id="targetLUFS" value="-16" min="-30" max="-6" step="0.1">
+                        <small>广播标准: -16 LUFS</small>
+                    </div>
+                    <div class="setting-group">
+                        <label for="targetTP">峰值限制 (dBTP):</label>
+                        <input type="number" id="targetTP" value="-1.5" min="-3" max="0" step="0.1">
+                        <small>建议: -1.5 dBTP</small>
+                    </div>
+                    <div class="setting-group">
+                        <label for="targetLRA">响度范围 (LU):</label>
+                        <input type="number" id="targetLRA" value="11" min="1" max="20" step="0.5">
+                        <small>建议: 11 LU</small>
+                    </div>
+                    <div class="setting-group">
+                        <label>处理模式:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="processMode" value="copy" checked>
+                                <span>流复制 (推荐)</span>
+                                <small>保持视频编码不变，仅处理音频</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 处理进度区域 -->
+            <section id="progressSection" class="progress-section hidden">
+                <div class="section-header">
+                    <h3>⚡ 处理进度</h3>
+                </div>
+
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span id="progressPercent">0%</span>
+                        <span id="progressTime">--:--</span>
+                    </div>
+                </div>
+
+                <div id="progressStatus" class="progress-status">准备中...</div>
+            </section>
+
+            <!-- 结果区域 -->
+            <section id="resultSection" class="result-section hidden">
+                <div class="section-header">
+                    <h3>✅ 处理完成</h3>
+                </div>
+
+                <div class="result-info">
+                    <p>视频已成功处理，音频响度已调节到目标标准</p>
+                    <div class="result-actions">
+                        <button id="openOutputBtn" class="btn btn-success">打开输出文件</button>
+                        <button id="showInFolderBtn" class="btn btn-secondary">在文件夹中显示</button>
+                        <button id="processAnotherBtn" class="btn btn-primary">处理另一个文件</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 批量处理区域 -->
+            <section id="batchSection" class="batch-section hidden">
+                <div class="section-header">
+                    <h3>📦 批量处理</h3>
+                    <button id="toggleBatchBtn" class="btn btn-secondary">切换到批量模式</button>
+                </div>
+
+                <div class="batch-content">
+                    <div class="batch-files">
+                        <h4>待处理文件列表</h4>
+                        <div id="batchFileList" class="file-list"></div>
+                        <button id="addBatchFilesBtn" class="btn btn-primary">添加文件</button>
+                    </div>
+
+                    <div class="batch-progress">
+                        <h4>批量处理进度</h4>
+                        <div id="batchProgressList" class="progress-list"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 底部状态栏 -->
+        <footer class="app-footer">
+            <div class="footer-left">
+                <span id="appStatus">就绪</span>
+            </div>
+            <div class="footer-right">
+                <span id="appVersion">v1.0.0</span>
+                <span class="separator">|</span>
+                <span id="ffmpegStatus">FFmpeg: 检查中...</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 模态对话框 -->
+    <div id="aboutModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>关于 HEVC视频音频响度调节器</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="about-info">
+                    <div class="app-icon">🎬</div>
+                    <h4>HEVC视频音频响度调节器</h4>
+                    <p class="version">版本 <span id="aboutVersion">1.0.0</span></p>
+                    <p class="description">
+                        专业级视频音频响度标准化工具，基于FFmpeg和EBU R128标准，
+                        支持HEVC/H.265视频格式，保持视频编码不变的同时精确调节音频响度。
+                    </p>
+                    <div class="tech-info">
+                        <h5>技术信息</h5>
+                        <ul>
+                            <li>Electron: <span id="electronVersion">--</span></li>
+                            <li>Node.js: <span id="nodeVersion">--</span></li>
+                            <li>平台: <span id="platformInfo">--</span></li>
+                            <li>FFmpeg: <span id="ffmpegVersion">已集成</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <script>
-        // 动态加载FFmpeg库并确保正确加载
-        async function loadFFmpegLibraries() {
-            const loadingText = document.getElementById('loadingText');
-
-            try {
-                loadingText.textContent = '正在加载FFmpeg核心库...';
-
-                // 加载FFmpeg主库 - 尝试不同的CDN
-                try {
-                    await loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js');
-                } catch (e) {
-                    console.warn('主CDN失败，尝试备用CDN...');
-                    await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js');
-                }
-
-                if (typeof FFmpegWASM === 'undefined') {
-                    throw new Error('FFmpeg主库加载失败');
-                }
-
-                loadingText.textContent = '正在加载FFmpeg工具库...';
-
-                // 加载FFmpeg工具库 - 尝试不同的CDN
-                try {
-                    await loadScript('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js');
-                } catch (e) {
-                    console.warn('主CDN失败，尝试备用CDN...');
-                    await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js');
-                }
-
-                if (typeof FFmpegUtil === 'undefined') {
-                    console.error('FFmpegUtil未定义，检查全局对象:', window);
-                    console.error('可用的全局变量:', Object.keys(window).filter(key => key.includes('FFmpeg')));
-                    throw new Error('FFmpeg工具库加载失败 - FFmpegUtil未定义');
-                }
-
-                console.log('FFmpegUtil加载成功:', FFmpegUtil);
-
-                loadingText.textContent = '正在加载处理器...';
-
-                // 加载我们的处理器
-                await loadScript('ffmpeg-processor.js');
-
-                loadingText.textContent = '正在初始化应用...';
-
-                // 加载应用逻辑
-                await loadScript('app.js');
-
-                // 确保应用初始化
-                if (typeof initializeApp === 'function') {
-                    initializeApp();
-                } else {
-                    // 如果initializeApp不存在，直接创建VideoAudioNormalizer
-                    if (typeof VideoAudioNormalizer !== 'undefined') {
-                        new VideoAudioNormalizer();
-                    } else {
-                        throw new Error('VideoAudioNormalizer类未找到');
-                    }
-                }
-
-            } catch (error) {
-                console.error('库加载失败:', error);
-                loadingText.textContent = '加载失败: ' + error.message;
-                loadingText.style.color = 'red';
-                throw error;
-            }
-        }
-
-        function loadScript(src) {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = src;
-                script.onload = resolve;
-                script.onerror = () => reject(new Error(`无法加载脚本: ${src}`));
-                document.head.appendChild(script);
-            });
-        }
-
-        // 页面加载完成后开始加载库
-        document.addEventListener('DOMContentLoaded', loadFFmpegLibraries);
-    </script>
+    <script src="renderer.js"></script>
 </body>
 
 </html>

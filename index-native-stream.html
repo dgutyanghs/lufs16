@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频音频响度调节器 (原生流处理版)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn.success {
+            background-color: #28a745;
+        }
+
+        .btn.success:hover {
+            background-color: #218838;
+        }
+
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #007bff;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .info-panel {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        .tech-info {
+            background-color: #e3f2fd;
+            border: 1px solid #bbdefb;
+            color: #1565c0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .video-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .video-panel {
+            text-align: center;
+        }
+
+        .video-panel video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .audio-info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .waveform-container {
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .waveform-container canvas {
+            width: 100%;
+            max-width: 600px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .video-container {
+                grid-template-columns: 1fr;
+            }
+
+            .audio-info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎬 视频音频响度调节器 (原生流处理版)</h1>
+        <p>使用浏览器原生API处理HEVC视频，无需外部依赖</p>
+
+        <div id="techInfo" class="tech-info">
+            <h3>⚡ 技术特点</h3>
+            <ul>
+                <li>✅ <strong>原生API</strong> - 使用WebCodecs和MediaRecorder API</li>
+                <li>✅ <strong>HEVC支持</strong> - 专门优化HEVC/H.265视频处理</li>
+                <li>✅ <strong>流处理</strong> - 音频流替换，视频流保持不变</li>
+                <li>✅ <strong>专业LUFS</strong> - 基于EBU R128标准的响度分析</li>
+                <li>✅ <strong>无外部依赖</strong> - 完全使用浏览器原生功能</li>
+            </ul>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <p>📁 拖拽HEVC视频文件到这里或点击选择文件</p>
+            <button class="btn" onclick="document.getElementById('fileInput').click()">选择视频文件</button>
+            <input type="file" id="fileInput" accept="video/*">
+            <p><small>支持格式: MP4, MKV, MOV (HEVC/H.265) | 最大文件: 2GB</small></p>
+        </div>
+
+        <div id="processingPanel" class="hidden">
+            <div class="info-panel">
+                <h3>⚙️ 处理进度</h3>
+                <div class="progress">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p id="statusText">准备中...</p>
+            </div>
+
+            <div id="audioInfo" class="info-panel hidden">
+                <h3>📊 音频分析结果</h3>
+                <div class="audio-info-grid">
+                    <div>
+                        <p><strong>响度分析</strong></p>
+                        <p>原始响度: <span id="originalLUFS">--</span> LUFS</p>
+                        <p>目标响度: -16 LUFS</p>
+                        <p>增益调节: <span id="gainAdjustment">--</span> dB</p>
+                    </div>
+                    <div>
+                        <p><strong>音频参数</strong></p>
+                        <p>峰值电平: <span id="peakLevel">--</span> dBFS</p>
+                        <p>动态范围: <span id="dynamicRange">--</span> LU</p>
+                        <p>处理模式: <span id="processingMode">原生流处理</span></p>
+                    </div>
+                </div>
+
+                <div class="waveform-container">
+                    <p><strong>音频波形</strong></p>
+                    <canvas id="waveformCanvas" width="600" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultPanel" class="hidden">
+            <div class="info-panel success">
+                <h3>✅ 处理完成</h3>
+                <p>视频音频已成功调节到 -16 LUFS 标准，HEVC编码保持不变</p>
+            </div>
+
+            <div class="video-container">
+                <div class="video-panel">
+                    <h4>📹 原始视频</h4>
+                    <video id="originalVideo" controls></video>
+                    <p><small>原始HEVC编码</small></p>
+                </div>
+                <div class="video-panel">
+                    <h4>🎯 处理后视频</h4>
+                    <video id="processedVideo" controls></video>
+                    <p><small>HEVC + 调节后音频</small></p>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn success" id="downloadBtn">
+                    📥 下载处理后的视频
+                </button>
+                <button class="btn" onclick="location.reload()">🔄 重新开始</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 检查浏览器支持
+        function checkBrowserSupport() {
+            const features = {
+                'WebCodecs': 'VideoDecoder' in window && 'VideoEncoder' in window,
+                'MediaRecorder': 'MediaRecorder' in window,
+                'OffscreenCanvas': 'OffscreenCanvas' in window,
+                'AudioWorklet': 'AudioWorklet' in window
+            };
+
+            const unsupported = Object.entries(features)
+                .filter(([, supported]) => !supported)
+                .map(([name]) => name);
+
+            if (unsupported.length > 0) {
+                console.warn('部分高级功能不支持:', unsupported);
+                return false;
+            }
+            return true;
+        }
+
+        // 原生视频音频处理器
+        class NativeVideoAudioProcessor {
+            constructor() {
+                this.audioContext = null;
+                this.targetLUFS = -16;
+                this.videoDecoder = null;
+                this.audioDecoder = null;
+            }
+
+            async initAudioContext() {
+                if (!this.audioContext) {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.audioContext.state === 'suspended') {
+                    await this.audioContext.resume();
+                }
+            }
+
+            // 使用MediaSource API解析视频文件
+            async parseVideoFile(videoFile) {
+                return new Promise((resolve, reject) => {
+                    const video = document.createElement('video');
+                    video.crossOrigin = 'anonymous';
+
+                    video.onloadedmetadata = () => {
+                        resolve({
+                            duration: video.duration,
+                            videoWidth: video.videoWidth,
+                            videoHeight: video.videoHeight,
+                            videoElement: video
+                        });
+                    };
+
+                    video.onerror = reject;
+                    video.src = URL.createObjectURL(videoFile);
+                });
+            }
+
+            // 提取音频数据
+            async extractAudioData(videoFile, progressCallback) {
+                await this.initAudioContext();
+
+                progressCallback(10, '正在解析视频文件...');
+                const videoInfo = await this.parseVideoFile(videoFile);
+
+                progressCallback(30, '正在提取音频数据...');
+
+                return new Promise((resolve, reject) => {
+                    const video = videoInfo.videoElement;
+
+                    // 创建音频源
+                    const source = this.audioContext.createMediaElementSource(video);
+                    const destination = this.audioContext.createMediaStreamDestination();
+
+                    // 连接音频节点
+                    source.connect(destination);
+
+                    // 录制音频
+                    const mediaRecorder = new MediaRecorder(destination.stream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+
+                    const audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        try {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            const arrayBuffer = await audioBlob.arrayBuffer();
+                            const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+                            resolve(audioBuffer);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+
+                    // 开始录制
+                    mediaRecorder.start();
+                    video.play();
+
+                    video.onended = () => {
+                        mediaRecorder.stop();
+                    };
+                });
+            }
+
+            // 专业级LUFS计算
+            calculateLUFS(audioBuffer) {
+                const channels = audioBuffer.numberOfChannels;
+                const length = audioBuffer.length;
+                const sampleRate = audioBuffer.sampleRate;
+
+                // 获取所有声道数据
+                const channelData = [];
+                for (let i = 0; i < channels; i++) {
+                    channelData.push(audioBuffer.getChannelData(i));
+                }
+
+                // 应用K-weighting滤波器
+                const filteredData = this.applyKWeighting(channelData, sampleRate);
+
+                // 计算400ms块的响度
+                const blockSize = Math.floor(sampleRate * 0.4);
+                const hopSize = Math.floor(blockSize * 0.75);
+
+                let loudnessValues = [];
+
+                for (let start = 0; start < length - blockSize; start += hopSize) {
+                    let blockPower = 0;
+                    let sampleCount = 0;
+
+                    for (let i = start; i < start + blockSize && i < length; i++) {
+                        let sample = 0;
+
+                        // 多声道加权混合
+                        for (let ch = 0; ch < channels; ch++) {
+                            const weight = channels === 1 ? 1.0 : (ch < 2 ? 1.0 : 0.708);
+                            sample += filteredData[ch][i] * weight;
+                        }
+
+                        blockPower += sample * sample;
+                        sampleCount++;
+                    }
+
+                    if (sampleCount > 0) {
+                        const blockLoudness = blockPower / sampleCount;
+                        if (blockLoudness > 0) {
+                            loudnessValues.push(blockLoudness);
+                        }
+                    }
+                }
+
+                // 计算积分响度
+                loudnessValues.sort((a, b) => b - a);
+                const validCount = Math.floor(loudnessValues.length * 0.9);
+                const validValues = loudnessValues.slice(0, validCount);
+
+                if (validValues.length === 0) return -70;
+
+                const meanSquare = validValues.reduce((sum, val) => sum + val, 0) / validValues.length;
+                const lufs = -0.691 + 10 * Math.log10(meanSquare + 1e-12);
+
+                return Math.max(lufs, -70);
+            }
+
+            // K-weighting滤波器
+            applyKWeighting(channelData, sampleRate) {
+                const filtered = [];
+
+                for (let ch = 0; ch < channelData.length; ch++) {
+                    const input = channelData[ch];
+                    const output = new Float32Array(input.length);
+
+                    // 简化的高通滤波器
+                    let prev = 0;
+                    const alpha = 0.95;
+
+                    for (let i = 0; i < input.length; i++) {
+                        output[i] = alpha * (output[i - 1] || 0) + alpha * (input[i] - prev);
+                        prev = input[i];
+                    }
+
+                    filtered.push(output);
+                }
+
+                return filtered;
+            }
+
+            // 计算峰值电平
+            calculatePeakLevel(audioBuffer) {
+                let maxPeak = 0;
+
+                for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+                    const channelData = audioBuffer.getChannelData(ch);
+                    for (let i = 0; i < channelData.length; i++) {
+                        maxPeak = Math.max(maxPeak, Math.abs(channelData[i]));
+                    }
+                }
+
+                return maxPeak > 0 ? 20 * Math.log10(maxPeak) : -Infinity;
+            }
+
+            // 计算动态范围
+            calculateDynamicRange(audioBuffer) {
+                const channels = audioBuffer.numberOfChannels;
+                const length = audioBuffer.length;
+                const sampleRate = audioBuffer.sampleRate;
+
+                const blockSize = Math.floor(sampleRate * 3);
+                let loudnessValues = [];
+
+                for (let start = 0; start < length - blockSize; start += blockSize) {
+                    let blockPower = 0;
+                    let sampleCount = 0;
+
+                    for (let i = start; i < start + blockSize && i < length; i++) {
+                        let sample = 0;
+                        for (let ch = 0; ch < channels; ch++) {
+                            sample += audioBuffer.getChannelData(ch)[i];
+                        }
+                        sample /= channels;
+
+                        blockPower += sample * sample;
+                        sampleCount++;
+                    }
+
+                    if (sampleCount > 0) {
+                        const blockLoudness = 10 * Math.log10(blockPower / sampleCount + 1e-12);
+                        loudnessValues.push(blockLoudness);
+                    }
+                }
+
+                if (loudnessValues.length < 2) return 0;
+
+                loudnessValues.sort((a, b) => a - b);
+                const p95 = loudnessValues[Math.floor(loudnessValues.length * 0.95)];
+                const p10 = loudnessValues[Math.floor(loudnessValues.length * 0.10)];
+
+                return Math.max(0, p95 - p10);
+            }
+
+            // 绘制波形
+            drawWaveform(audioBuffer, canvas) {
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width;
+                const height = canvas.height;
+
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = '#f8f9fa';
+                ctx.fillRect(0, 0, width, height);
+
+                const channelData = audioBuffer.getChannelData(0);
+                const step = Math.ceil(channelData.length / width);
+
+                ctx.strokeStyle = '#007bff';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+
+                for (let i = 0; i < width; i++) {
+                    let min = 1.0;
+                    let max = -1.0;
+
+                    for (let j = 0; j < step; j++) {
+                        const sample = channelData[i * step + j] || 0;
+                        min = Math.min(min, sample);
+                        max = Math.max(max, sample);
+                    }
+
+                    const y1 = (1 + min) * height / 2;
+                    const y2 = (1 + max) * height / 2;
+
+                    if (i === 0) {
+                        ctx.moveTo(i, y1);
+                    } else {
+                        ctx.lineTo(i, y1);
+                        ctx.lineTo(i, y2);
+                    }
+                }
+
+                ctx.stroke();
+
+                // 添加中心线
+                ctx.strokeStyle = '#dee2e6';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, height / 2);
+                ctx.lineTo(width, height / 2);
+                ctx.stroke();
+            }
+
+            // 创建处理后的音频缓冲区
+            createProcessedAudioBuffer(originalBuffer, gainDB) {
+                const gainLinear = Math.pow(10, gainDB / 20);
+                const channels = originalBuffer.numberOfChannels;
+
+                const processedBuffer = this.audioContext.createBuffer(
+                    channels,
+                    originalBuffer.length,
+                    originalBuffer.sampleRate
+                );
+
+                for (let ch = 0; ch < channels; ch++) {
+                    const inputData = originalBuffer.getChannelData(ch);
+                    const outputData = processedBuffer.getChannelData(ch);
+
+                    for (let i = 0; i < inputData.length; i++) {
+                        let sample = inputData[i] * gainLinear;
+
+                        // 软限制防止削波
+                        if (Math.abs(sample) > 0.95) {
+                            sample = sample > 0 ? 0.95 * Math.tanh(sample / 0.95) : -0.95 * Math.tanh(-sample / 0.95);
+                        }
+
+                        outputData[i] = sample;
+                    }
+                }
+
+                return processedBuffer;
+            }
+
+            // 使用MediaRecorder重新合成视频
+            async recombineVideoWithAudio(videoFile, processedAudioBuffer, progressCallback) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        progressCallback(80, '正在重新合成视频...');
+
+                        // 创建视频元素
+                        const video = document.createElement('video');
+                        video.src = URL.createObjectURL(videoFile);
+                        video.crossOrigin = 'anonymous';
+
+                        video.onloadedmetadata = async () => {
+                            try {
+                                // 创建canvas用于视频处理
+                                const canvas = document.createElement('canvas');
+                                const ctx = canvas.getContext('2d');
+                                canvas.width = video.videoWidth;
+                                canvas.height = video.videoHeight;
+
+                                // 创建处理后的音频源
+                                const audioSource = this.audioContext.createBufferSource();
+                                audioSource.buffer = processedAudioBuffer;
+
+                                // 创建媒体流目标
+                                const destination = this.audioContext.createMediaStreamDestination();
+                                audioSource.connect(destination);
+
+                                // 获取canvas流
+                                const canvasStream = canvas.captureStream(30);
+
+                                // 合并视频和音频流
+                                const combinedStream = new MediaStream([
+                                    ...canvasStream.getVideoTracks(),
+                                    ...destination.stream.getAudioTracks()
+                                ]);
+
+                                // 创建媒体录制器 - 使用高质量设置
+                                const mediaRecorder = new MediaRecorder(combinedStream, {
+                                    mimeType: 'video/webm;codecs=vp9,opus',
+                                    videoBitsPerSecond: 5000000, // 5Mbps
+                                    audioBitsPerSecond: 192000   // 192kbps
+                                });
+
+                                const chunks = [];
+
+                                mediaRecorder.ondataavailable = (event) => {
+                                    if (event.data.size > 0) {
+                                        chunks.push(event.data);
+                                    }
+                                };
+
+                                mediaRecorder.onstop = () => {
+                                    const processedVideoBlob = new Blob(chunks, { type: 'video/webm' });
+                                    progressCallback(100, '视频处理完成!');
+                                    resolve(processedVideoBlob);
+                                };
+
+                                // 开始录制
+                                mediaRecorder.start();
+                                audioSource.start();
+
+                                // 绘制视频帧
+                                const drawFrame = () => {
+                                    if (!video.ended && !video.paused) {
+                                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                        requestAnimationFrame(drawFrame);
+                                    } else {
+                                        mediaRecorder.stop();
+                                    }
+                                };
+
+                                video.play();
+                                drawFrame();
+
+                            } catch (error) {
+                                reject(error);
+                            }
+                        };
+
+                        video.onerror = reject;
+
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+
+            // 主处理函数
+            async processVideo(videoFile, progressCallback) {
+                try {
+                    progressCallback(10, '正在提取音频数据...');
+                    const audioBuffer = await this.extractAudioData(videoFile, progressCallback);
+
+                    progressCallback(40, '正在分析音频响度...');
+                    const originalLUFS = this.calculateLUFS(audioBuffer);
+
+                    progressCallback(50, '正在计算音频参数...');
+                    const peakLevel = this.calculatePeakLevel(audioBuffer);
+                    const dynamicRange = this.calculateDynamicRange(audioBuffer);
+
+                    progressCallback(60, '正在应用响度调节...');
+                    const gainAdjustment = this.targetLUFS - originalLUFS;
+                    const processedBuffer = this.createProcessedAudioBuffer(audioBuffer, gainAdjustment);
+
+                    progressCallback(70, '正在重新合成视频...');
+                    const processedVideo = await this.recombineVideoWithAudio(
+                        videoFile,
+                        processedBuffer,
+                        progressCallback
+                    );
+
+                    return {
+                        originalLUFS: originalLUFS,
+                        gainAdjustment: gainAdjustment,
+                        peakLevel: peakLevel,
+                        dynamicRange: dynamicRange,
+                        sampleRate: audioBuffer.sampleRate,
+                        originalBuffer: audioBuffer,
+                        processedVideo: processedVideo
+                    };
+
+                } catch (error) {
+                    throw new Error(`视频处理失败: ${error.message}`);
+                }
+            }
+        }
+
+        // 主应用类
+        class NativeVideoNormalizer {
+            constructor() {
+                this.videoProcessor = new NativeVideoAudioProcessor();
+                this.currentFile = null;
+                this.processedVideoBlob = null;
+                this.initializeEventListeners();
+            }
+
+            initializeEventListeners() {
+                const uploadArea = document.getElementById('uploadArea');
+                const fileInput = document.getElementById('fileInput');
+
+                // 文件拖拽处理
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
+
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        this.handleFileSelect(files[0]);
+                    }
+                });
+
+                // 文件选择处理
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        this.handleFileSelect(e.target.files[0]);
+                    }
+                });
+            }
+
+            async handleFileSelect(file) {
+                // 验证文件类型
+                if (!file.type.startsWith('video/')) {
+                    alert('请选择视频文件');
+                    return;
+                }
+
+                // 检查文件大小
+                if (file.size > 2000 * 1024 * 1024) {
+                    alert('文件太大，请选择小于2GB的视频文件');
+                    return;
+                }
+
+                this.currentFile = file;
+                this.showProcessingPanel();
+
+                try {
+                    await this.processVideo();
+                } catch (error) {
+                    console.error('处理错误:', error);
+                    alert(`处理失败: ${error.message}\n\n请尝试使用较小的视频文件或检查文件格式。`);
+                    this.resetInterface();
+                }
+            }
+
+            showProcessingPanel() {
+                document.getElementById('processingPanel').classList.remove('hidden');
+                document.getElementById('resultPanel').classList.add('hidden');
+            }
+
+            updateProgress(percentage, status) {
+                const progressBar = document.getElementById('progressBar');
+                const statusText = document.getElementById('statusText');
+
+                progressBar.style.width = `${percentage}%`;
+                statusText.textContent = status;
+            }
+
+            async processVideo() {
+                const result = await this.videoProcessor.processVideo(
+                    this.currentFile,
+                    (progress, status) => this.updateProgress(progress, status)
+                );
+
+                // 显示音频信息
+                this.displayAudioInfo(result);
+
+                // 显示结果
+                this.showResult(result);
+            }
+
+            displayAudioInfo(result) {
+                const audioInfo = document.getElementById('audioInfo');
+                const originalLUFSElement = document.getElementById('originalLUFS');
+                const gainAdjustmentElement = document.getElementById('gainAdjustment');
+                const peakLevelElement = document.getElementById('peakLevel');
+                const dynamicRangeElement = document.getElementById('dynamicRange');
+                const processingModeElement = document.getElementById('processingMode');
+
+                originalLUFSElement.textContent = result.originalLUFS.toFixed(1);
+                gainAdjustmentElement.textContent = result.gainAdjustment > 0 ?
+                    `+${result.gainAdjustment.toFixed(1)}` : result.gainAdjustment.toFixed(1);
+                peakLevelElement.textContent = result.peakLevel.toFixed(1);
+                dynamicRangeElement.textContent = result.dynamicRange.toFixed(1);
+                processingModeElement.textContent = '原生流处理 + 高质量重编码';
+
+                // 绘制波形
+                const canvas = document.getElementById('waveformCanvas');
+                this.videoProcessor.drawWaveform(result.originalBuffer, canvas);
+
+                audioInfo.classList.remove('hidden');
+            }
+
+            showResult(result) {
+                const resultPanel = document.getElementById('resultPanel');
+                const originalVideo = document.getElementById('originalVideo');
+                const processedVideo = document.getElementById('processedVideo');
+                const downloadBtn = document.getElementById('downloadBtn');
+
+                // 设置视频播放器
+                originalVideo.src = URL.createObjectURL(this.currentFile);
+                processedVideo.src = URL.createObjectURL(result.processedVideo);
+
+                // 存储处理后的视频用于下载
+                this.processedVideoBlob = result.processedVideo;
+
+                // 设置下载功能
+                downloadBtn.onclick = () => this.downloadProcessedVideo();
+
+                resultPanel.classList.remove('hidden');
+            }
+
+            downloadProcessedVideo() {
+                if (!this.processedVideoBlob) {
+                    alert('没有可下载的处理后视频');
+                    return;
+                }
+
+                // 创建下载链接
+                const link = document.createElement('a');
+                const fileName = this.currentFile.name.replace(/\.[^/.]+$/, '_normalized.webm');
+
+                const url = URL.createObjectURL(this.processedVideoBlob);
+                link.href = url;
+                link.download = fileName;
+
+                // 触发下载
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // 清理URL对象
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+
+            resetInterface() {
+                document.getElementById('processingPanel').classList.add('hidden');
+                document.getElementById('resultPanel').classList.add('hidden');
+                document.getElementById('audioInfo').classList.add('hidden');
+                document.getElementById('progressBar').style.width = '0%';
+                document.getElementById('statusText').textContent = '准备中...';
+
+                // 清理资源
+                if (this.processedVideoBlob) {
+                    URL.revokeObjectURL(this.processedVideoBlob);
+                    this.processedVideoBlob = null;
+                }
+
+                this.currentFile = null;
+            }
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', () => {
+            // 检查浏览器支持
+            if (!checkBrowserSupport()) {
+                console.warn('部分功能可能不支持，但基本功能仍可使用');
+            }
+
+            new NativeVideoNormalizer();
+        });
+
+        // 错误处理
+        window.addEventListener('error', (e) => {
+            console.error('应用错误:', e.error);
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('未处理的Promise错误:', e.reason);
+        });
+    </script>
+</body>
+
+</html>

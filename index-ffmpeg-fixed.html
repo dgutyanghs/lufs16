@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频音频响度调节器 (FFmpeg版本)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #007bff;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .info-panel {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>视频音频响度调节器 (FFmpeg版本)</h1>
+        <p>上传视频文件，使用专业FFmpeg引擎将音频响度调节到 -16 LUFS</p>
+
+        <div id="loadingStatus" class="info-panel">
+            <h3>正在加载FFmpeg...</h3>
+            <p id="loadingText">正在初始化系统...</p>
+            <div class="progress">
+                <div class="progress-bar" id="loadingProgress"></div>
+            </div>
+        </div>
+
+        <div class="upload-area" id="uploadArea" style="display: none;">
+            <p>拖拽视频文件到这里或点击选择文件</p>
+            <button class="btn" onclick="document.getElementById('fileInput').click()">选择视频文件</button>
+            <input type="file" id="fileInput" accept="video/*">
+        </div>
+
+        <div id="processingPanel" class="hidden">
+            <div class="info-panel">
+                <h3>处理进度</h3>
+                <div class="progress">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p id="statusText">准备中...</p>
+            </div>
+
+            <div id="audioInfo" class="info-panel hidden">
+                <h3>音频分析结果</h3>
+                <p>原始响度: <span id="originalLUFS">--</span> LUFS</p>
+                <p>目标响度: -16 LUFS</p>
+                <p>增益调节: <span id="gainAdjustment">--</span> dB</p>
+                <p>峰值电平: <span id="peakLevel">--</span> dBFS</p>
+                <p>动态范围: <span id="dynamicRange">--</span> LU</p>
+            </div>
+        </div>
+
+        <div id="resultPanel" class="hidden">
+            <h3>处理完成</h3>
+            <video id="resultVideo" controls style="width: 100%; max-width: 600px;"></video>
+            <br>
+            <button class="btn" id="downloadBtn">下载处理后的视频</button>
+            <button class="btn" onclick="location.reload()">重新开始</button>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let FFmpegWASM, FFmpegUtil;
+        let ffmpegProcessor;
+
+        // 多CDN加载策略
+        const CDN_SOURCES = [
+            {
+                name: 'unpkg',
+                ffmpeg: 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js',
+                util: 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js'
+            },
+            {
+                name: 'jsdelivr',
+                ffmpeg: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js',
+                util: 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js'
+            },
+            {
+                name: 'unpkg-old',
+                ffmpeg: 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js',
+                util: 'https://unpkg.com/@ffmpeg/util@0.11.0/dist/util.min.js'
+            }
+        ];
+
+        // 加载脚本的Promise包装
+        function loadScript(src, timeout = 30000) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+
+                const timer = setTimeout(() => {
+                    script.remove();
+                    reject(new Error(`加载超时: ${src}`));
+                }, timeout);
+
+                script.onload = () => {
+                    clearTimeout(timer);
+                    console.log(`脚本加载成功: ${src}`);
+                    resolve();
+                };
+
+                script.onerror = () => {
+                    clearTimeout(timer);
+                    script.remove();
+                    reject(new Error(`加载失败: ${src}`));
+                };
+
+                document.head.appendChild(script);
+            });
+        }
+
+        // 更新加载进度
+        function updateLoadingProgress(percentage, text) {
+            const loadingProgress = document.getElementById('loadingProgress');
+            const loadingText = document.getElementById('loadingText');
+
+            if (loadingProgress) {
+                loadingProgress.style.width = `${percentage}%`;
+            }
+            if (loadingText) {
+                loadingText.textContent = text;
+            }
+        }
+
+        // 尝试从多个CDN加载FFmpeg
+        async function loadFFmpegFromCDNs() {
+            for (let i = 0; i < CDN_SOURCES.length; i++) {
+                const cdn = CDN_SOURCES[i];
+
+                try {
+                    updateLoadingProgress(10 + i * 30, `正在尝试 ${cdn.name} CDN...`);
+
+                    // 清理之前的全局变量
+                    if (window.FFmpegWASM) delete window.FFmpegWASM;
+                    if (window.FFmpegUtil) delete window.FFmpegUtil;
+
+                    // 加载FFmpeg主库
+                    updateLoadingProgress(15 + i * 30, `加载FFmpeg主库 (${cdn.name})...`);
+                    await loadScript(cdn.ffmpeg);
+
+                    // 检查FFmpeg是否加载成功
+                    if (typeof window.FFmpegWASM === 'undefined') {
+                        throw new Error('FFmpeg主库未正确加载');
+                    }
+
+                    // 加载FFmpeg工具库
+                    updateLoadingProgress(25 + i * 30, `加载FFmpeg工具库 (${cdn.name})...`);
+                    await loadScript(cdn.util);
+
+                    // 检查工具库是否加载成功
+                    if (typeof window.FFmpegUtil === 'undefined') {
+                        throw new Error('FFmpeg工具库未正确加载');
+                    }
+
+                    // 成功加载
+                    FFmpegWASM = window.FFmpegWASM;
+                    FFmpegUtil = window.FFmpegUtil;
+
+                    updateLoadingProgress(40 + i * 30, `${cdn.name} CDN 加载成功！`);
+                    console.log(`成功从 ${cdn.name} 加载FFmpeg`);
+                    return true;
+
+                } catch (error) {
+                    console.warn(`从 ${cdn.name} 加载失败:`, error.message);
+
+                    if (i === CDN_SOURCES.length - 1) {
+                        throw new Error(`所有CDN都加载失败。最后错误: ${error.message}`);
+                    }
+
+                    // 继续尝试下一个CDN
+                    continue;
+                }
+            }
+        }
+
+        // FFmpeg音频处理器
+        class FFmpegAudioProcessor {
+            constructor() {
+                this.ffmpeg = null;
+                this.isLoaded = false;
+                this.targetLUFS = -16;
+            }
+
+            async initFFmpeg() {
+                if (this.isLoaded) return;
+
+                const { FFmpeg } = FFmpegWASM;
+                const { toBlobURL } = FFmpegUtil;
+
+                this.ffmpeg = new FFmpeg();
+
+                // 加载FFmpeg核心文件
+                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd';
+                this.ffmpeg.on('log', ({ message }) => {
+                    console.log('FFmpeg:', message);
+                });
+
+                try {
+                    updateLoadingProgress(70, '正在初始化FFmpeg核心...');
+
+                    const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+                    console.log(`SharedArrayBuffer支持: ${hasSharedArrayBuffer ? '是' : '否'}`);
+
+                    if (hasSharedArrayBuffer) {
+                        console.log('使用多线程版本的FFmpeg');
+                        await this.ffmpeg.load({
+                            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                            workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
+                        });
+                    } else {
+                        console.log('使用单线程版本的FFmpeg');
+                        await this.ffmpeg.load({
+                            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                        });
+                    }
+                } catch (error) {
+                    console.error('FFmpeg核心加载失败:', error);
+                    throw new Error(`FFmpeg核心初始化失败: ${error.message}`);
+                }
+
+                this.isLoaded = true;
+                updateLoadingProgress(90, 'FFmpeg初始化成功！');
+                console.log('FFmpeg初始化成功');
+            }
+
+            // 分析音频的LUFS、峰值和动态范围
+            async analyzeAudio(videoFile, progressCallback) {
+                await this.initFFmpeg();
+
+                progressCallback(10, '准备分析音频...');
+
+                const { fetchFile } = FFmpegUtil;
+                const inputFileName = 'input.mp4';
+                await this.ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
+
+                progressCallback(30, '提取音频信息...');
+
+                // 使用FFmpeg的loudnorm滤镜分析音频
+                const analysisArgs = [
+                    '-i', inputFileName,
+                    '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json',
+                    '-f', 'null',
+                    '-'
+                ];
+
+                let analysisOutput = '';
+                this.ffmpeg.on('log', ({ message }) => {
+                    analysisOutput += message + '\n';
+                });
+
+                await this.ffmpeg.exec(analysisArgs);
+
+                progressCallback(50, '解析分析结果...');
+
+                // 解析loudnorm的JSON输出
+                const analysisResult = this.parseLoudnormOutput(analysisOutput);
+
+                return {
+                    inputLUFS: parseFloat(analysisResult.input_i) || -23,
+                    inputTP: parseFloat(analysisResult.input_tp) || -6,
+                    inputLRA: parseFloat(analysisResult.input_lra) || 7,
+                    peakLevel: parseFloat(analysisResult.input_tp) || -6,
+                    dynamicRange: parseFloat(analysisResult.input_lra) || 7
+                };
+            }
+
+            // 解析loudnorm滤镜的输出
+            parseLoudnormOutput(output) {
+                const jsonMatch = output.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    try {
+                        return JSON.parse(jsonMatch[0]);
+                    } catch (e) {
+                        console.error('解析loudnorm输出失败:', e);
+                    }
+                }
+
+                // 如果JSON解析失败，尝试从文本中提取信息
+                const lufsMatch = output.match(/Input Integrated:\s*([-\d.]+)\s*LUFS/i);
+                const tpMatch = output.match(/Input True Peak:\s*([-\d.]+)\s*dBTP/i);
+                const lraMatch = output.match(/Input LRA:\s*([-\d.]+)\s*LU/i);
+
+                return {
+                    input_i: lufsMatch ? lufsMatch[1] : '-23',
+                    input_tp: tpMatch ? tpMatch[1] : '-6',
+                    input_lra: lraMatch ? lraMatch[1] : '7'
+                };
+            }
+
+            // 处理视频，调节音频响度到目标LUFS
+            async processVideo(videoFile, progressCallback) {
+                try {
+                    progressCallback(5, '初始化FFmpeg...');
+                    await this.initFFmpeg();
+
+                    // 分析原始音频
+                    const analysisResult = await this.analyzeAudio(videoFile, progressCallback);
+
+                    progressCallback(60, '计算音频处理参数...');
+
+                    // 计算所需的增益调节
+                    const gainAdjustment = this.targetLUFS - analysisResult.inputLUFS;
+
+                    progressCallback(70, '应用音频响度标准化...');
+
+                    const inputFileName = 'input.mp4';
+                    const outputFileName = 'output.mp4';
+
+                    // 确保文件已写入
+                    const { fetchFile } = FFmpegUtil;
+                    await this.ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
+
+                    // 使用loudnorm滤镜进行处理
+                    const processArgs = [
+                        '-i', inputFileName,
+                        '-af', `loudnorm=I=${this.targetLUFS}:TP=-1.5:LRA=11:linear=true`,
+                        '-c:v', 'copy', // 保持视频不变
+                        '-c:a', 'aac',  // 重新编码音频
+                        '-b:a', '192k', // 音频比特率
+                        outputFileName
+                    ];
+
+                    await this.ffmpeg.exec(processArgs);
+
+                    progressCallback(90, '生成输出文件...');
+
+                    // 读取处理后的文件
+                    const outputData = await this.ffmpeg.readFile(outputFileName);
+                    const outputBlob = new Blob([outputData.buffer], { type: 'video/mp4' });
+
+                    // 清理临时文件
+                    await this.ffmpeg.deleteFile(inputFileName);
+                    await this.ffmpeg.deleteFile(outputFileName);
+
+                    progressCallback(100, '处理完成!');
+
+                    return {
+                        originalLUFS: analysisResult.inputLUFS,
+                        originalTP: analysisResult.inputTP,
+                        originalLRA: analysisResult.inputLRA,
+                        peakLevel: analysisResult.peakLevel,
+                        dynamicRange: analysisResult.dynamicRange,
+                        gainAdjustment: gainAdjustment,
+                        processedVideo: outputBlob
+                    };
+
+                } catch (error) {
+                    console.error('FFmpeg处理错误:', error);
+                    throw new Error(`音频处理失败: ${error.message}`);
+                }
+            }
+        }
+
+        // 视频处理器主类
+        class VideoAudioNormalizer {
+            constructor() {
+                this.ffmpegProcessor = null;
+                this.currentFile = null;
+                this.isInitialized = false;
+                this.processedVideoBlob = null;
+            }
+
+            async initialize() {
+                try {
+                    updateLoadingProgress(50, '正在创建FFmpeg处理器...');
+                    this.ffmpegProcessor = new FFmpegAudioProcessor();
+
+                    updateLoadingProgress(60, '正在设置事件监听器...');
+                    this.initializeEventListeners();
+
+                    updateLoadingProgress(100, '初始化完成！');
+
+                    // 显示成功状态
+                    const loadingStatus = document.getElementById('loadingStatus');
+                    const uploadArea = document.getElementById('uploadArea');
+
+                    loadingStatus.className = 'info-panel success';
+                    loadingStatus.innerHTML = '<h3>✅ FFmpeg加载成功</h3><p>现在可以上传视频文件进行处理</p>';
+
+                    setTimeout(() => {
+                        loadingStatus.style.display = 'none';
+                        uploadArea.style.display = 'block';
+                    }, 2000);
+
+                    this.isInitialized = true;
+                    console.log('FFmpeg版本应用初始化完成');
+
+                } catch (error) {
+                    console.error('应用初始化失败:', error);
+                    const loadingStatus = document.getElementById('loadingStatus');
+                    loadingStatus.className = 'info-panel error';
+                    loadingStatus.innerHTML = `<h3>❌ 初始化失败</h3><p>${error.message}</p>`;
+                }
+            }
+
+            initializeEventListeners() {
+                const uploadArea = document.getElementById('uploadArea');
+                const fileInput = document.getElementById('fileInput');
+
+                // 文件拖拽处理
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
+
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        this.handleFileSelect(files[0]);
+                    }
+                });
+
+                // 文件选择处理
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        this.handleFileSelect(e.target.files[0]);
+                    }
+                });
+            }
+
+            async handleFileSelect(file) {
+                if (!this.isInitialized) {
+                    alert('应用尚未初始化完成，请稍候再试');
+                    return;
+                }
+
+                // 验证文件类型
+                if (!file.type.startsWith('video/')) {
+                    alert('请选择视频文件');
+                    return;
+                }
+
+                // 检查文件大小
+                if (file.size > 1000 * 1024 * 1024) {
+                    alert('文件太大，请选择小于1GB的视频文件');
+                    return;
+                }
+
+                this.currentFile = file;
+                this.showProcessingPanel();
+
+                try {
+                    await this.processVideo();
+                } catch (error) {
+                    console.error('处理错误:', error);
+                    alert(`处理失败: ${error.message}\n\n请检查浏览器控制台获取更多信息。`);
+                    this.resetInterface();
+                }
+            }
+
+            showProcessingPanel() {
+                document.getElementById('processingPanel').classList.remove('hidden');
+                document.getElementById('resultPanel').classList.add('hidden');
+            }
+
+            updateProgress(percentage, status) {
+                const progressBar = document.getElementById('progressBar');
+                const statusText = document.getElementById('statusText');
+
+                progressBar.style.width = `${percentage}%`;
+                statusText.textContent = status;
+            }
+
+            async processVideo() {
+                const result = await this.ffmpegProcessor.processVideo(
+                    this.currentFile,
+                    (progress, status) => this.updateProgress(progress, status)
+                );
+
+                // 显示音频信息
+                this.displayAudioInfo(result);
+
+                // 显示结果
+                this.showResult(result.processedVideo);
+            }
+
+            displayAudioInfo(result) {
+                const audioInfo = document.getElementById('audioInfo');
+                const originalLUFSElement = document.getElementById('originalLUFS');
+                const gainAdjustmentElement = document.getElementById('gainAdjustment');
+                const peakLevelElement = document.getElementById('peakLevel');
+                const dynamicRangeElement = document.getElementById('dynamicRange');
+
+                originalLUFSElement.textContent = result.originalLUFS.toFixed(1);
+                gainAdjustmentElement.textContent = result.gainAdjustment > 0 ?
+                    `+${result.gainAdjustment.toFixed(1)}` : result.gainAdjustment.toFixed(1);
+                peakLevelElement.textContent = result.peakLevel.toFixed(1);
+                dynamicRangeElement.textContent = result.dynamicRange.toFixed(1);
+
+                audioInfo.classList.remove('hidden');
+            }
+
+            showResult(processedVideoBlob) {
+                const resultPanel = document.getElementById('resultPanel');
+                const resultVideoElement = document.getElementById('resultVideo');
+                const downloadBtn = document.getElementById('downloadBtn');
+
+                // 显示处理后的视频
+                const videoURL = URL.createObjectURL(processedVideoBlob);
+                resultVideoElement.src = videoURL;
+
+                // 存储blob用于下载
+                this.processedVideoBlob = processedVideoBlob;
+
+                // 设置下载功能
+                downloadBtn.onclick = () => this.downloadProcessedVideo();
+
+                resultPanel.classList.remove('hidden');
+            }
+
+            downloadProcessedVideo() {
+                if (!this.processedVideoBlob) {
+                    alert('没有可下载的处理后视频');
+                    return;
+                }
+
+                // 创建下载链接
+                const link = document.createElement('a');
+                const fileName = this.currentFile.name.replace(/\.[^/.]+$/, '_normalized.mp4');
+
+                const url = URL.createObjectURL(this.processedVideoBlob);
+                link.href = url;
+                link.download = fileName;
+
+                // 触发下载
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // 清理URL对象
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+
+            resetInterface() {
+                document.getElementById('processingPanel').classList.add('hidden');
+                document.getElementById('resultPanel').classList.add('hidden');
+                document.getElementById('audioInfo').classList.add('hidden');
+                document.getElementById('progressBar').style.width = '0%';
+                document.getElementById('statusText').textContent = '准备中...';
+
+                // 清理资源
+                if (this.processedVideoBlob) {
+                    URL.revokeObjectURL(this.processedVideoBlob);
+                    this.processedVideoBlob = null;
+                }
+
+                this.currentFile = null;
+            }
+        }
+
+        // 主初始化函数
+        async function initializeApp() {
+            try {
+                // 加载FFmpeg库
+                await loadFFmpegFromCDNs();
+
+                // 创建并初始化应用
+                const app = new VideoAudioNormalizer();
+                await app.initialize();
+
+            } catch (error) {
+                console.error('应用启动失败:', error);
+                const loadingStatus = document.getElementById('loadingStatus');
+                loadingStatus.className = 'info-panel error';
+                loadingStatus.innerHTML = `
+                    <h3>❌ 加载失败</h3>
+                    <p>${error.message}</p>
+                    <p><small>请检查网络连接或尝试刷新页面</small></p>
+                `;
+            }
+        }
+
+        // 页面加载完成后开始初始化
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // 错误处理
+        window.addEventListener('error', (e) => {
+            console.error('应用错误:', e.error);
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('未处理的Promise错误:', e.reason);
+        });
+    </script>
+</body>
+
+</html>

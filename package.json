@@ -1,0 +1,36 @@
+{
+    "name": "video-audio-normalizer",
+    "version": "1.0.0",
+    "description": "基于FFmpeg.js的浏览器端视频音频响度调节工具",
+    "main": "index.html",
+    "scripts": {
+        "start": "node server-headers.js",
+        "serve": "python -m http.server 8080",
+        "dev": "npm start"
+    },
+    "keywords": [
+        "ffmpeg",
+        "audio",
+        "video",
+        "lufs",
+        "loudness",
+        "normalization",
+        "browser",
+        "webassembly"
+    ],
+    "author": "Kiro AI Assistant",
+    "license": "MIT",
+    "dependencies": {},
+    "devDependencies": {},
+    "engines": {
+        "node": ">=14.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/your-username/video-audio-normalizer.git"
+    },
+    "bugs": {
+        "url": "https://github.com/your-username/video-audio-normalizer/issues"
+    },
+    "homepage": "https://github.com/your-username/video-audio-normalizer#readme"
+}

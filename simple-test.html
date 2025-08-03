@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>简单FFmpeg测试</title>
+</head>
+
+<body>
+    <h1>FFmpeg库加载测试</h1>
+    <div id="status">正在测试...</div>
+
+    <script>
+        async function testFFmpeg() {
+            const status = document.getElementById('status');
+
+            try {
+                status.innerHTML = '正在加载FFmpeg主库...';
+
+                // 直接使用script标签加载
+                const script1 = document.createElement('script');
+                script1.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js';
+                document.head.appendChild(script1);
+
+                await new Promise((resolve, reject) => {
+                    script1.onload = resolve;
+                    script1.onerror = reject;
+                });
+
+                status.innerHTML = '正在加载FFmpeg工具库...';
+
+                const script2 = document.createElement('script');
+                script2.src = 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js';
+                document.head.appendChild(script2);
+
+                await new Promise((resolve, reject) => {
+                    script2.onload = resolve;
+                    script2.onerror = reject;
+                });
+
+                // 等待一下让库完全加载
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                status.innerHTML = `
+                    <h2>加载结果:</h2>
+                    <p>FFmpegWASM: ${typeof FFmpegWASM !== 'undefined' ? '✅ 已加载' : '❌ 未加载'}</p>
+                    <p>FFmpegUtil: ${typeof FFmpegUtil !== 'undefined' ? '✅ 已加载' : '❌ 未加载'}</p>
+                    <p>全局变量: ${Object.keys(window).filter(k => k.includes('FFmpeg')).join(', ')}</p>
+                `;
+
+            } catch (error) {
+                status.innerHTML = `<p style="color: red;">加载失败: ${error.message}</p>`;
+            }
+        }
+
+        window.addEventListener('load', testFFmpeg);
+    </script>
+</body>
+
+</html>

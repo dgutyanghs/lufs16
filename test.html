@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFmpeg.js 测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>FFmpeg.js 环境测试</h1>
+
+    <div id="tests"></div>
+
+    <button onclick="runTests()">重新运行测试</button>
+
+    <script>
+        // 动态加载并测试FFmpeg库
+        async function loadAndTestLibraries() {
+            const testsDiv = document.getElementById('tests');
+
+            function addTestResult(name, success, message) {
+                const testDiv = document.createElement('div');
+                testDiv.className = `test-item ${success ? 'success' : 'error'}`;
+                testDiv.innerHTML = `
+                    <strong>${name}</strong>: ${success ? '✅ 通过' : '❌ 失败'}<br>
+                    ${message}
+                `;
+                testsDiv.appendChild(testDiv);
+            }
+
+            try {
+                addTestResult('开始加载', true, '开始加载FFmpeg库...');
+
+                // 加载FFmpeg主库
+                await loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js');
+                addTestResult('FFmpeg主库加载', typeof FFmpegWASM !== 'undefined',
+                    typeof FFmpegWASM !== 'undefined' ? 'FFmpeg主库加载成功' : 'FFmpeg主库加载失败');
+
+                // 加载FFmpeg工具库
+                try {
+                    await loadScript('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js');
+                } catch (e) {
+                    console.warn('主CDN失败，尝试备用CDN...');
+                    await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js');
+                }
+
+                addTestResult('FFmpeg工具库加载', typeof FFmpegUtil !== 'undefined',
+                    typeof FFmpegUtil !== 'undefined' ? 'FFmpeg工具库加载成功' : 'FFmpeg工具库加载失败');
+
+                if (typeof FFmpegUtil !== 'undefined') {
+                    addTestResult('FFmpegUtil内容检查', true, `FFmpegUtil包含: ${Object.keys(FFmpegUtil).join(', ')}`);
+                }
+
+            } catch (error) {
+                addTestResult('库加载', false, `加载失败: ${error.message}`);
+            }
+        }
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => {
+                    console.log(`脚本加载成功: ${src}`);
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.error(`脚本加载失败: ${src}`);
+                    reject(new Error(`无法加载脚本: ${src}`));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        window.addEventListener('load', loadAndTestLibraries);
+    </script>
+
+    <script>
+        function addTestResult(name, success, message) {
+            const testsDiv = document.getElementById('tests');
+            const testDiv = document.createElement('div');
+            testDiv.className = `test-item ${success ? 'success' : 'error'}`;
+            testDiv.innerHTML = `
+                <strong>${name}</strong>: ${success ? '✅ 通过' : '❌ 失败'}<br>
+                ${message}
+            `;
+            testsDiv.appendChild(testDiv);
+        }
+
+        function addInfo(message) {
+            const testsDiv = document.getElementById('tests');
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'test-item info';
+            infoDiv.innerHTML = `<strong>信息</strong>: ${message}`;
+            testsDiv.appendChild(infoDiv);
+        }
+
+        async function runTests() {
+            const testsDiv = document.getElementById('tests');
+            testsDiv.innerHTML = '';
+
+            // 基础环境检查
+            addTestResult('WebAssembly支持', typeof WebAssembly !== 'undefined',
+                typeof WebAssembly !== 'undefined' ? 'WebAssembly可用' : 'WebAssembly不可用');
+
+            addTestResult('SharedArrayBuffer支持', typeof SharedArrayBuffer !== 'undefined',
+                typeof SharedArrayBuffer !== 'undefined' ? 'SharedArrayBuffer可用' : 'SharedArrayBuffer不可用，性能会受影响');
+
+            addTestResult('FFmpegWASM加载', typeof FFmpegWASM !== 'undefined',
+                typeof FFmpegWASM !== 'undefined' ? 'FFmpeg库已加载' : 'FFmpeg库未加载');
+
+            addTestResult('FFmpegUtil加载', typeof FFmpegUtil !== 'undefined',
+                typeof FFmpegUtil !== 'undefined' ? 'FFmpeg Util库已加载' : 'FFmpeg Util库未加载');
+
+            // 环境信息
+            addInfo(`用户代理: ${navigator.userAgent}`);
+            addInfo(`协议: ${location.protocol}`);
+            addInfo(`主机: ${location.host}`);
+
+            // FFmpeg初始化测试
+            if (typeof FFmpegWASM !== 'undefined' && typeof FFmpegUtil !== 'undefined') {
+                try {
+                    addInfo('开始FFmpeg初始化测试...');
+
+                    const { FFmpeg } = FFmpegWASM;
+                    const { toBlobURL } = FFmpegUtil;
+
+                    const ffmpeg = new FFmpeg();
+
+                    ffmpeg.on('log', ({ message }) => {
+                        console.log('FFmpeg log:', message);
+                    });
+
+                    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd';
+
+                    await ffmpeg.load({
+                        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                    });
+
+                    addTestResult('FFmpeg初始化', true, 'FFmpeg成功初始化');
+
+                } catch (error) {
+                    addTestResult('FFmpeg初始化', false, `初始化失败: ${error.message}`);
+                    console.error('FFmpeg初始化错误:', error);
+                }
+            }
+        }
+
+        // 页面加载时自动运行测试
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+
+</html>

@@ -24,36 +24,40 @@ jobs:
     - name: Install dependencies
       run: npm install
       
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install Pillow || echo "PIL installation failed, will skip icon creation"
+      
     - name: Create icon (if needed)
       run: |
         mkdir -p assets
         if [ ! -f "assets/icon.png" ]; then
           echo "Creating placeholder icon..."
-          # Create a simple colored square as icon
-          python3 -c "
-from PIL import Image, ImageDraw, ImageFont
-import os
-
-img = Image.new('RGBA', (512, 512), (0, 0, 0, 0))
-draw = ImageDraw.Draw(img)
-draw.rounded_rectangle([50, 50, 462, 462], radius=50, fill='#4facfe')
-draw.rounded_rectangle([150, 180, 362, 332], radius=8, fill='white')
-draw.polygon([(220, 220), (220, 292), (280, 256)], fill='#4facfe')
-
+          python3 -c '
+import sys
 try:
-    font = ImageFont.truetype('/System/Library/Fonts/Arial.ttf', 24)
-except:
-    font = ImageFont.load_default()
-
-text = 'HEVC'
-bbox = draw.textbbox((0, 0), text, font=font)
-text_width = bbox[2] - bbox[0]
-x = (512 - text_width) // 2
-draw.text((x, 380), text, fill='white', font=font)
-
-img.save('assets/icon.png')
-print('Icon created successfully')
-" || echo "Icon creation failed, using default"
+    from PIL import Image, ImageDraw, ImageFont
+    img = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle([50, 50, 462, 462], radius=50, fill="#4facfe")
+    draw.rounded_rectangle([150, 180, 362, 332], radius=8, fill="white")
+    draw.polygon([(220, 220), (220, 292), (280, 256)], fill="#4facfe")
+    try:
+        font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 24)
+    except:
+        font = ImageFont.load_default()
+    text = "HEVC"
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    x = (512 - text_width) // 2
+    draw.text((x, 380), text, fill="white", font=font)
+    img.save("assets/icon.png")
+    print("Icon created successfully")
+except ImportError:
+    print("PIL not available, skipping icon creation")
+    sys.exit(0)
+' || echo "Icon creation failed, using default"
         fi
       
     - name: Build macOS app

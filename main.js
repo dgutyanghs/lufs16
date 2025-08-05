@@ -5,9 +5,51 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 const ffprobeStatic = require('ffprobe-static');
 
-// 设置FFmpeg路径
-ffmpeg.setFfmpegPath(ffmpegStatic);
-ffmpeg.setFfprobePath(ffprobeStatic.path);
+// 设置FFmpeg路径 - 处理打包后的路径问题
+function setupFFmpegPaths() {
+    try {
+        let ffmpegPath, ffprobePath;
+        
+        if (app.isPackaged) {
+            // 打包后的路径
+            const resourcesPath = process.resourcesPath;
+            ffmpegPath = path.join(resourcesPath, 'ffmpeg-static', 'ffmpeg');
+            
+            // FFprobe路径需要根据平台和架构确定
+            const platform = process.platform;
+            const arch = process.arch;
+            ffprobePath = path.join(resourcesPath, 'ffprobe-static', 'bin', platform, arch, 'ffprobe');
+            
+            // macOS下需要添加可执行权限
+            if (process.platform === 'darwin') {
+                try {
+                    fs.chmodSync(ffmpegPath, '755');
+                    fs.chmodSync(ffprobePath, '755');
+                } catch (chmodErr) {
+                    console.warn('无法设置FFmpeg可执行权限:', chmodErr.message);
+                }
+            }
+        } else {
+            // 开发环境路径
+            ffmpegPath = ffmpegStatic;
+            ffprobePath = ffprobeStatic.path;
+        }
+        
+        console.log('FFmpeg路径:', ffmpegPath);
+        console.log('FFprobe路径:', ffprobePath);
+        
+        ffmpeg.setFfmpegPath(ffmpegPath);
+        ffmpeg.setFfprobePath(ffprobePath);
+        
+        return { ffmpegPath, ffprobePath };
+    } catch (error) {
+        console.error('FFmpeg路径设置失败:', error);
+        // 回退到默认路径
+        ffmpeg.setFfmpegPath(ffmpegStatic);
+        ffmpeg.setFfprobePath(ffprobeStatic.path);
+        return { ffmpegPath: ffmpegStatic, ffprobePath: ffprobeStatic.path };
+    }
+}
 
 let mainWindow;
 
@@ -46,7 +88,11 @@ function createWindow() {
 }
 
 // 应用准备就绪
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    // 设置FFmpeg路径
+    setupFFmpegPaths();
+    createWindow();
+});
 
 // 所有窗口关闭时退出应用 (macOS除外)
 app.on('window-all-closed', () => {
@@ -318,10 +364,11 @@ ipcMain.handle('check-ffmpeg', async () => {
             if (err) {
                 resolve({ available: false, error: err.message });
             } else {
+                const paths = setupFFmpegPaths();
                 resolve({
                     available: true,
-                    ffmpegPath: ffmpegStatic,
-                    ffprobePath: ffprobeStatic.path,
+                    ffmpegPath: paths.ffmpegPath,
+                    ffprobePath: paths.ffprobePath,
                     formatsCount: Object.keys(formats).length
                 });
             }

@@ -28,7 +28,10 @@
         "video",
         "normalization"
     ],
-    "author": "Kiro AI Assistant",
+    "author": {
+        "name": "Donnie Yang",
+        "email": "dgutyang@gmail.com"
+    },
     "license": "MIT",
     "devDependencies": {
         "electron": "^28.0.0",
@@ -80,15 +83,7 @@
                 {
                     "target": "zip",
                     "arch": [
-                        "x64",
-                        "arm64"
-                    ]
-                },
-                {
-                    "target": "tar.gz",
-                    "arch": [
-                        "x64",
-                        "arm64"
+                        "x64"
                     ]
                 }
             ],

@@ -1,0 +1,218 @@
+name: Build Windows App
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - "v*" # 当推送标签时触发
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create Windows icon
+        run: |
+          mkdir -p assets
+          if (!(Test-Path "assets/icon.ico")) {
+            Write-Host "Creating placeholder Windows icon..."
+            # 如果没有ICO文件，从PNG创建或使用默认图标
+            if (Test-Path "assets/icon.png") {
+              Write-Host "PNG icon found, will use for build"
+            } else {
+              Write-Host "No icon found, electron-builder will use default"
+            }
+          }
+        shell: pwsh
+
+      - name: Build Windows app
+        run: npm run build-win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build outputs
+        run: |
+          Write-Host "Build outputs:"
+          Get-ChildItem -Path "dist" -Recurse | Format-Table Name, Length, LastWriteTime
+        shell: pwsh
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.msi
+            dist/*.appx
+          retention-days: 30
+
+      - name: Create Windows installation guide
+        run: |
+          $guide = @"
+          # Windows Installation Guide
+
+          ## Files Included
+          - Windows Installer: HEVC音频响度调节器 Setup 1.0.0.exe
+          - Portable Version: HEVC音频响度调节器-1.0.0-win.zip (if available)
+
+          ## System Requirements
+          - Windows 10 or later (64-bit)
+          - 4GB RAM minimum, 8GB recommended
+          - 1GB free disk space
+
+          ## Installation Steps
+
+          ### Method 1: Using Installer (Recommended)
+          1. Download the .exe installer file
+          2. Right-click and select "Run as administrator" (if needed)
+          3. Follow the installation wizard
+          4. Launch from Start Menu or Desktop shortcut
+
+          ### Method 2: Portable Version
+          1. Download the .zip file
+          2. Extract to your preferred location
+          3. Run the executable directly
+
+          ## First Launch
+          If Windows Defender shows a warning:
+          1. Click "More info"
+          2. Click "Run anyway"
+          3. The app will remember this choice
+
+          ## Features
+          - Maintains HEVC encoding and MP4 format
+          - Professional LUFS audio analysis
+          - Built-in FFmpeg (no installation required)
+          - Native Windows 10/11 integration
+          - Hardware acceleration support
+
+          ## Troubleshooting
+
+          ### App won't start
+          - Ensure Windows 10 or later
+          - Install Visual C++ Redistributable if prompted
+          - Run as administrator if needed
+
+          ### Antivirus warnings
+          - Add the app folder to antivirus exclusions
+          - The app is safe - warnings are due to unsigned executable
+
+          ### Performance issues
+          - Close other video applications
+          - Ensure sufficient free disk space
+          - Use SSD storage for better performance
+
+          Built on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+          "@
+
+          Set-Content -Path "dist/Windows-Installation-Guide.md" -Value $guide -Encoding UTF8
+        shell: pwsh
+
+      - name: Upload Windows installation guide
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installation-guide
+          path: dist/Windows-Installation-Guide.md
+
+  # 创建Windows Release的job
+  create-windows-release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Windows build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-builds
+          path: ./windows-artifacts
+
+      - name: Download Windows installation guide
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installation-guide
+          path: ./windows-artifacts
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded Windows artifacts:"
+          ls -la ./windows-artifacts/
+
+      - name: Get version info
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="v$(date +'%Y.%m.%d')-$(echo $GITHUB_SHA | cut -c1-7)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create Windows Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}-windows
+          name: HEVC音频响度调节器 Windows版 ${{ steps.version.outputs.version }}
+          body: |
+            # HEVC音频响度调节器 Windows版本
+
+            ## 🎯 核心功能
+            - 保持HEVC编码和MP4格式不变
+            - 专业LUFS音频响度分析
+            - 内置FFmpeg，无需额外安装
+            - 原生Windows 10/11支持
+            - 硬件加速支持
+
+            ## 📦 下载文件
+            - **安装版**: 下载 `*.exe` 安装程序
+            - **便携版**: 下载 `*.zip` 压缩包（如果可用）
+            - **安装指南**: 查看 `Windows-Installation-Guide.md`
+
+            ## 🚀 安装步骤
+            1. 下载 .exe 安装程序
+            2. 右键选择"以管理员身份运行"（如需要）
+            3. 按照安装向导完成安装
+            4. 从开始菜单或桌面快捷方式启动
+
+            ## 🔧 系统要求
+            - Windows 10 或更高版本（64位）
+            - 4GB+ RAM 推荐
+            - 1GB 可用磁盘空间
+
+            ## ⚠️ 安全提示
+            如果Windows Defender显示警告：
+            1. 点击"更多信息"
+            2. 点击"仍要运行"
+            3. 应用程序是安全的，警告是由于未签名可执行文件
+
+            构建时间: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+            提交: ${{ github.sha }}
+          files: |
+            ./windows-artifacts/*.exe
+            ./windows-artifacts/*.zip
+            ./windows-artifacts/*.msi
+            ./windows-artifacts/Windows-Installation-Guide.md
+          draft: false
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

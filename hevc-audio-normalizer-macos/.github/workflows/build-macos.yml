@@ -1,0 +1,88 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create placeholder icon
+        run: |
+          mkdir -p assets
+          if [ ! -f "assets/icon.png" ]; then
+            echo "Creating simple placeholder icon..."
+            # Create a simple 512x512 PNG using ImageMagick (available on macOS)
+            convert -size 512x512 xc:"#4facfe" -fill white -draw "roundrectangle 50,50 462,462 50,50" -fill "#4facfe" -draw "roundrectangle 150,180 362,332 8,8" -fill white -draw "polygon 220,220 220,292 280,256" -pointsize 24 -fill white -gravity center -annotate +0+100 "HEVC" assets/icon.png 2>/dev/null || echo "Icon creation skipped - ImageMagick not available"
+          fi
+
+      - name: Build macOS app
+        run: npm run build-mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build outputs
+        run: |
+          echo "Build outputs:"
+          ls -la dist/
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.dmg
+          retention-days: 30
+
+      - name: Create installation guide
+        run: |
+          echo "# macOS Installation Guide" > dist/macOS-Installation-Guide.md
+          echo "" >> dist/macOS-Installation-Guide.md
+          echo "## Files Included" >> dist/macOS-Installation-Guide.md
+          echo "- Intel Mac: HEVC音频响度调节器-1.0.0-x64.zip" >> dist/macOS-Installation-Guide.md
+          echo "- Apple Silicon Mac: HEVC音频响度调节器-1.0.0-arm64.zip" >> dist/macOS-Installation-Guide.md
+          echo "- DMG files (if available): *.dmg" >> dist/macOS-Installation-Guide.md
+          echo "" >> dist/macOS-Installation-Guide.md
+          echo "## Installation Steps" >> dist/macOS-Installation-Guide.md
+          echo "1. Download the appropriate file for your Mac" >> dist/macOS-Installation-Guide.md
+          echo "2. Extract the ZIP file or mount the DMG" >> dist/macOS-Installation-Guide.md
+          echo "3. Drag the app to Applications folder" >> dist/macOS-Installation-Guide.md
+          echo "4. Launch from Launchpad or Applications folder" >> dist/macOS-Installation-Guide.md
+          echo "" >> dist/macOS-Installation-Guide.md
+          echo "## First Launch" >> dist/macOS-Installation-Guide.md
+          echo "If you see a security warning:" >> dist/macOS-Installation-Guide.md
+          echo "1. Go to System Preferences > Security & Privacy" >> dist/macOS-Installation-Guide.md
+          echo "2. Click \"Open Anyway\" for the blocked app" >> dist/macOS-Installation-Guide.md
+          echo "" >> dist/macOS-Installation-Guide.md
+          echo "## Features" >> dist/macOS-Installation-Guide.md
+          echo "- Maintains HEVC encoding and MP4 format" >> dist/macOS-Installation-Guide.md
+          echo "- Professional LUFS audio analysis" >> dist/macOS-Installation-Guide.md
+          echo "- Built-in FFmpeg (no installation required)" >> dist/macOS-Installation-Guide.md
+          echo "- Supports Intel and Apple Silicon Macs" >> dist/macOS-Installation-Guide.md
+          echo "" >> dist/macOS-Installation-Guide.md
+          echo "Built on: $(date)" >> dist/macOS-Installation-Guide.md
+
+      - name: Upload installation guide
+        uses: actions/upload-artifact@v4
+        with:
+          name: installation-guide
+          path: dist/macOS-Installation-Guide.md

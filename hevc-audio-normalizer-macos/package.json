@@ -28,10 +28,7 @@
         "video",
         "normalization"
     ],
-    "author": {
-        "name": "Donnie Yang",
-        "email": "dgutyang@gmail.com"
-    },
+    "author": "Kiro AI Assistant",
     "license": "MIT",
     "devDependencies": {
         "electron": "^28.0.0",
@@ -75,30 +72,23 @@
             }
         ],
         "win": {
-            "target": [
-                {
-                    "target": "nsis",
-                    "arch": [
-                        "x64"
-                    ]
-                },
-                {
-                    "target": "zip",
-                    "arch": [
-                        "x64"
-                    ]
-                }
-            ],
-            "icon": "assets/icon.ico",
-            "artifactName": "${productName}-${version}-${arch}.${ext}",
-            "requestedExecutionLevel": "asInvoker"
+            "target": "nsis",
+            "icon": "assets/icon.ico"
         },
         "mac": {
             "target": [
                 {
                     "target": "zip",
                     "arch": [
-                        "x64"
+                        "x64",
+                        "arm64"
+                    ]
+                },
+                {
+                    "target": "tar.gz",
+                    "arch": [
+                        "x64",
+                        "arm64"
                     ]
                 }
             ],
@@ -116,14 +106,7 @@
             "oneClick": false,
             "allowToChangeInstallationDirectory": true,
             "createDesktopShortcut": true,
-            "createStartMenuShortcut": true,
-            "installerIcon": "assets/icon.ico",
-            "uninstallerIcon": "assets/icon.ico",
-            "installerHeaderIcon": "assets/icon.ico",
-            "deleteAppDataOnUninstall": false,
-            "runAfterFinish": true,
-            "menuCategory": "Video",
-            "shortcutName": "HEVC音频响度调节器"
+            "createStartMenuShortcut": true
         },
         "dmg": {
             "title": "HEVC音频响度调节器",

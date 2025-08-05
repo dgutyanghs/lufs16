@@ -1,0 +1,243 @@
+name: Build All Platforms
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - "v*" # 当推送标签时触发
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows app
+        run: npm run build-win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.msi
+          retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create placeholder icon
+        run: |
+          mkdir -p assets
+          if [ ! -f "assets/icon.png" ]; then
+            echo "Creating simple placeholder icon..."
+            convert -size 512x512 xc:"#4facfe" -fill white -draw "roundrectangle 50,50 462,462 50,50" -fill "#4facfe" -draw "roundrectangle 150,180 362,332 8,8" -fill white -draw "polygon 220,220 220,292 280,256" -pointsize 24 -fill white -gravity center -annotate +0+100 "HEVC" assets/icon.png 2>/dev/null || echo "Icon creation skipped - ImageMagick not available"
+          fi
+
+      - name: Build macOS app
+        run: npm run build-mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.dmg
+          retention-days: 30
+
+  # 创建统一Release
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-builds
+          path: ./artifacts
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-builds
+          path: ./artifacts
+
+      - name: Create installation guides
+        run: |
+          # Windows安装指南
+          cat > ./artifacts/Windows-Installation-Guide.md << 'EOF'
+          # Windows Installation Guide
+
+          ## System Requirements
+          - Windows 10 or later (64-bit)
+          - 4GB RAM minimum, 8GB recommended
+          - 1GB free disk space
+
+          ## Installation Steps
+          1. Download the .exe installer file
+          2. Right-click and select "Run as administrator" (if needed)
+          3. Follow the installation wizard
+          4. Launch from Start Menu or Desktop shortcut
+
+          ## First Launch
+          If Windows Defender shows a warning:
+          1. Click "More info"
+          2. Click "Run anyway"
+
+          ## Features
+          - Maintains HEVC encoding and MP4 format
+          - Professional LUFS audio analysis
+          - Built-in FFmpeg (no installation required)
+          - Native Windows 10/11 integration
+          EOF
+
+          # macOS安装指南
+          cat > ./artifacts/macOS-Installation-Guide.md << 'EOF'
+          # macOS Installation Guide
+
+          ## System Requirements
+          - macOS 10.14 (Mojave) or later
+          - 4GB RAM minimum, 8GB recommended
+          - 1GB free disk space
+
+          ## Installation Steps
+          1. Download the appropriate file for your Mac
+          2. Extract the ZIP file
+          3. Drag the app to Applications folder
+          4. Launch from Launchpad or Applications folder
+
+          ## First Launch
+          If you see a security warning:
+          1. Go to System Preferences > Security & Privacy
+          2. Click "Open Anyway" for the blocked app
+
+          ## Features
+          - Maintains HEVC encoding and MP4 format
+          - Professional LUFS audio analysis
+          - Built-in FFmpeg (no installation required)
+          - Supports Intel and Apple Silicon Macs
+          EOF
+
+      - name: List all artifacts
+        run: |
+          echo "All build artifacts:"
+          ls -la ./artifacts/
+
+      - name: Get version info
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="v$(date +'%Y.%m.%d')-$(echo $GITHUB_SHA | cut -c1-7)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create Unified Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: HEVC音频响度调节器 ${{ steps.version.outputs.version }}
+          body: |
+            # HEVC音频响度调节器 跨平台版本
+
+            ## 🎯 核心功能
+            - 保持HEVC编码和MP4格式不变
+            - 专业LUFS音频响度分析
+            - 内置FFmpeg，无需额外安装
+            - 跨平台支持：Windows 10+ 和 macOS 10.14+
+
+            ## 📦 下载文件
+
+            ### Windows 版本
+            - **安装版**: 下载 `*.exe` 安装程序
+            - **便携版**: 下载 `*-win.zip` 压缩包（如果可用）
+            - **安装指南**: 查看 `Windows-Installation-Guide.md`
+
+            ### macOS 版本
+            - **Intel Mac**: 下载 `*-x64.zip` 文件
+            - **Apple Silicon Mac**: 下载 `*-arm64.zip` 文件
+            - **安装指南**: 查看 `macOS-Installation-Guide.md`
+
+            ## 🚀 快速安装
+
+            ### Windows
+            1. 下载 .exe 安装程序
+            2. 右键选择"以管理员身份运行"
+            3. 按照向导完成安装
+
+            ### macOS
+            1. 下载适合你Mac的文件
+            2. 解压ZIP文件
+            3. 拖拽到应用程序文件夹
+
+            ## 🔧 系统要求
+            - **Windows**: Windows 10+ (64位), 4GB+ RAM
+            - **macOS**: macOS 10.14+, 4GB+ RAM
+            - **存储**: 1GB 可用磁盘空间
+
+            ## ⚠️ 安全提示
+            - Windows: 如遇Defender警告，点击"更多信息" → "仍要运行"
+            - macOS: 如遇安全警告，前往"系统偏好设置" → "安全性与隐私" → "仍要打开"
+
+            ## 🎬 使用方法
+            1. 启动应用程序
+            2. 拖拽HEVC视频文件到窗口
+            3. 设置目标响度（默认-16 LUFS）
+            4. 点击开始处理
+            5. 等待完成并保存
+
+            构建时间: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+            提交: ${{ github.sha }}
+          files: |
+            ./artifacts/*.exe
+            ./artifacts/*.zip
+            ./artifacts/*.dmg
+            ./artifacts/*.tar.gz
+            ./artifacts/*.msi
+            ./artifacts/*Installation-Guide.md
+          draft: false
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

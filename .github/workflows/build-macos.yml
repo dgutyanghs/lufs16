@@ -9,6 +9,10 @@ on:
     branches: [main, master]
   workflow_dispatch: # 允许手动触发
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -158,8 +162,6 @@ jobs:
             提交: ${{ github.sha }}
           files: |
             ./artifacts/*.zip
-            ./artifacts/*.dmg
-            ./artifacts/*.tar.gz
             ./artifacts/macOS-Installation-Guide.md
           draft: false
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}

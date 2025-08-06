@@ -26,18 +26,21 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Create Windows icon
+      - name: Prepare Windows build
         run: |
-          mkdir -p assets
-          if (!(Test-Path "assets/icon.ico")) {
-            Write-Host "Creating placeholder Windows icon..."
-            # 如果没有ICO文件，从PNG创建或使用默认图标
-            if (Test-Path "assets/icon.png") {
-              Write-Host "PNG icon found, will use for build"
-            } else {
-              Write-Host "No icon found, electron-builder will use default"
-            }
+          Write-Host "🔍 Preparing Windows build environment..."
+
+          # 检查关键文件
+          if (Test-Path "package.json") { Write-Host "✅ package.json found" }
+          if (Test-Path "main.js") { Write-Host "✅ main.js found" }
+          if (Test-Path "assets") { 
+            Write-Host "✅ assets directory found"
+            Get-ChildItem "assets" | ForEach-Object { Write-Host "  - $($_.Name)" }
+          } else {
+            Write-Host "ℹ️  No assets directory - electron-builder will use defaults"
           }
+
+          Write-Host "🚀 Ready for Windows build"
         shell: pwsh
 
       - name: Build Windows app

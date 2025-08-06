@@ -13,30 +13,72 @@ function setupFFmpegPaths() {
         if (app.isPackaged) {
             // 打包后的路径
             const resourcesPath = process.resourcesPath;
-            ffmpegPath = path.join(resourcesPath, 'ffmpeg-static', 'ffmpeg');
+            console.log('Resources路径:', resourcesPath);
             
-            // FFprobe路径需要根据平台和架构确定
+            // 尝试多个可能的FFmpeg路径
+            const possibleFFmpegPaths = [
+                path.join(resourcesPath, 'ffmpeg-static', 'ffmpeg'),
+                path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg')
+            ];
+            
+            // 尝试多个可能的FFprobe路径
             const platform = process.platform;
             const arch = process.arch;
-            ffprobePath = path.join(resourcesPath, 'ffprobe-static', 'bin', platform, arch, 'ffprobe');
+            const possibleFFprobePaths = [
+                path.join(resourcesPath, 'ffprobe-static', 'bin', platform, arch, 'ffprobe'),
+                path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', platform, arch, 'ffprobe')
+            ];
             
-            // macOS下需要添加可执行权限
+            // 查找存在的FFmpeg路径
+            ffmpegPath = possibleFFmpegPaths.find(p => {
+                try {
+                    return fs.existsSync(p);
+                } catch (e) {
+                    return false;
+                }
+            });
+            
+            // 查找存在的FFprobe路径
+            ffprobePath = possibleFFprobePaths.find(p => {
+                try {
+                    return fs.existsSync(p);
+                } catch (e) {
+                    return false;
+                }
+            });
+            
+            if (!ffmpegPath || !ffprobePath) {
+                throw new Error(`FFmpeg或FFprobe路径未找到. FFmpeg: ${ffmpegPath}, FFprobe: ${ffprobePath}`);
+            }
+            
+            // macOS下设置可执行权限
             if (process.platform === 'darwin') {
                 try {
-                    fs.chmodSync(ffmpegPath, '755');
-                    fs.chmodSync(ffprobePath, '755');
+                    fs.chmodSync(ffmpegPath, 0o755);
+                    fs.chmodSync(ffprobePath, 0o755);
+                    console.log('已设置FFmpeg可执行权限');
                 } catch (chmodErr) {
                     console.warn('无法设置FFmpeg可执行权限:', chmodErr.message);
                 }
             }
+            
+            // 验证文件是否可执行
+            try {
+                fs.accessSync(ffmpegPath, fs.constants.F_OK | fs.constants.X_OK);
+                fs.accessSync(ffprobePath, fs.constants.F_OK | fs.constants.X_OK);
+                console.log('FFmpeg文件权限验证通过');
+            } catch (accessErr) {
+                console.warn('FFmpeg文件权限验证失败:', accessErr.message);
+            }
+            
         } else {
             // 开发环境路径
             ffmpegPath = ffmpegStatic;
             ffprobePath = ffprobeStatic.path;
         }
         
-        console.log('FFmpeg路径:', ffmpegPath);
-        console.log('FFprobe路径:', ffprobePath);
+        console.log('最终FFmpeg路径:', ffmpegPath);
+        console.log('最终FFprobe路径:', ffprobePath);
         
         ffmpeg.setFfmpegPath(ffmpegPath);
         ffmpeg.setFfprobePath(ffprobePath);
@@ -45,9 +87,14 @@ function setupFFmpegPaths() {
     } catch (error) {
         console.error('FFmpeg路径设置失败:', error);
         // 回退到默认路径
-        ffmpeg.setFfmpegPath(ffmpegStatic);
-        ffmpeg.setFfprobePath(ffprobeStatic.path);
-        return { ffmpegPath: ffmpegStatic, ffprobePath: ffprobeStatic.path };
+        try {
+            ffmpeg.setFfmpegPath(ffmpegStatic);
+            ffmpeg.setFfprobePath(ffprobeStatic.path);
+            return { ffmpegPath: ffmpegStatic, ffprobePath: ffprobeStatic.path };
+        } catch (fallbackError) {
+            console.error('回退路径也失败:', fallbackError);
+            throw new Error('无法设置FFmpeg路径');
+        }
     }
 }
 

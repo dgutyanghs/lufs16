@@ -90,7 +90,7 @@
                     ]
                 }
             ],
-            "artifactName": "${productName}-${version}-${arch}.${ext}",
+            "artifactName": "${productName}-Windows-${version}-${arch}.${ext}",
             "requestedExecutionLevel": "asInvoker"
         },
         "mac": {
@@ -98,7 +98,8 @@
                 {
                     "target": "zip",
                     "arch": [
-                        "x64"
+                        "x64",
+                        "arm64"
                     ]
                 }
             ],
@@ -106,7 +107,7 @@
             "category": "public.app-category.video",
             "bundleVersion": "1.0.0",
             "minimumSystemVersion": "10.14.0",
-            "artifactName": "${productName}-${version}-${arch}.${ext}"
+            "artifactName": "${productName}-macOS-${version}-${arch}.${ext}"
         },
         "linux": {
             "target": "AppImage",

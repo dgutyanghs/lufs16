@@ -168,12 +168,37 @@ jobs:
           echo "Preparing files for release..."
           mkdir -p ./release-files
 
-          # Copy existing files to release directory
-          find ./artifacts -name "*.exe" -exec cp {} ./release-files/ \; 2>/dev/null || echo "No .exe files found"
-          find ./artifacts -name "*.zip" -exec cp {} ./release-files/ \; 2>/dev/null || echo "No .zip files found"
-          find ./artifacts -name "*.dmg" -exec cp {} ./release-files/ \; 2>/dev/null || echo "No .dmg files found"
-          find ./artifacts -name "*.tar.gz" -exec cp {} ./release-files/ \; 2>/dev/null || echo "No .tar.gz files found"
-          find ./artifacts -name "*.msi" -exec cp {} ./release-files/ \; 2>/dev/null || echo "No .msi files found"
+          # Copy and rename files to avoid conflicts
+          for file in ./artifacts/*.exe; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              cp "$file" "./release-files/$filename"
+              echo "Added: $filename"
+            fi
+          done
+
+          for file in ./artifacts/*.zip; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              # Check if it's already properly named
+              if [[ "$filename" == *"macOS"* ]] || [[ "$filename" == *"Windows"* ]]; then
+                cp "$file" "./release-files/$filename"
+              else
+                # Add platform identifier if missing
+                if [[ "$filename" == *"x64"* ]]; then
+                  new_name="${filename/-x64/-macOS-x64}"
+                elif [[ "$filename" == *"arm64"* ]]; then
+                  new_name="${filename/-arm64/-macOS-arm64}"
+                else
+                  new_name="$filename"
+                fi
+                cp "$file" "./release-files/$new_name"
+              fi
+              echo "Added: $(basename "$file") -> $(ls ./release-files/ | tail -1)"
+            fi
+          done
+
+          # Copy installation guides
           find ./artifacts -name "*Installation-Guide.md" -exec cp {} ./release-files/ \; 2>/dev/null || echo "No installation guides found"
 
           echo "Files prepared for release:"
@@ -190,7 +215,20 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-      - name: Create Unified Release
+      - name: Check if release exists
+        id: check_release
+        run: |
+          if gh release view "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.version }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.version }} does not exist"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create or Update Unified Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.version }}
@@ -206,14 +244,14 @@ jobs:
 
             ## 📦 下载文件
 
-            ### Windows 版本
-            - **安装版**: 下载 `*.exe` 安装程序
-            - **便携版**: 下载 `*-win.zip` 压缩包（如果可用）
+            ### Windows 版本 (64位)
+            - **安装版**: 下载 `*Windows*.exe` 安装程序
+            - **便携版**: 下载 `*Windows*.zip` 压缩包
             - **安装指南**: 查看 `Windows-Installation-Guide.md`
 
             ### macOS 版本
-            - **Intel Mac**: 下载 `*-x64.zip` 文件
-            - **Apple Silicon Mac**: 下载 `*-arm64.zip` 文件
+            - **Intel Mac**: 下载 `*macOS*x64.zip` 文件
+            - **Apple Silicon Mac**: 下载 `*macOS*arm64.zip` 文件  
             - **安装指南**: 查看 `macOS-Installation-Guide.md`
 
             ## 🚀 快速安装

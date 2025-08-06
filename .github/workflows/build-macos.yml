@@ -35,7 +35,6 @@ jobs:
           mkdir -p assets
           if [ ! -f "assets/icon.png" ]; then
             echo "Creating simple placeholder icon..."
-            # Create a simple 512x512 PNG using ImageMagick (available on macOS)
             convert -size 512x512 xc:"#4facfe" -fill white -draw "roundrectangle 50,50 462,462 50,50" -fill "#4facfe" -draw "roundrectangle 150,180 362,332 8,8" -fill white -draw "polygon 220,220 220,292 280,256" -pointsize 24 -fill white -gravity center -annotate +0+100 "HEVC" assets/icon.png 2>/dev/null || echo "Icon creation skipped - ImageMagick not available"
           fi
 
@@ -53,8 +52,6 @@ jobs:
           name: macos-builds
           path: |
             dist/*.zip
-            dist/*.tar.gz
-            dist/*.dmg
           retention-days: 30
 
       - name: Create installation guide
@@ -62,13 +59,12 @@ jobs:
           echo "# macOS Installation Guide" > dist/macOS-Installation-Guide.md
           echo "" >> dist/macOS-Installation-Guide.md
           echo "## Files Included" >> dist/macOS-Installation-Guide.md
-          echo "- Intel Mac: HEVC音频响度调节器-1.0.0-x64.zip" >> dist/macOS-Installation-Guide.md
-          echo "- Apple Silicon Mac: HEVC音频响度调节器-1.0.0-arm64.zip" >> dist/macOS-Installation-Guide.md
-          echo "- DMG files (if available): *.dmg" >> dist/macOS-Installation-Guide.md
+          echo "- Intel Mac: HEVC音频响度调节器-macOS-*-x64.zip" >> dist/macOS-Installation-Guide.md
+          echo "- Apple Silicon Mac: HEVC音频响度调节器-macOS-*-arm64.zip" >> dist/macOS-Installation-Guide.md
           echo "" >> dist/macOS-Installation-Guide.md
           echo "## Installation Steps" >> dist/macOS-Installation-Guide.md
           echo "1. Download the appropriate file for your Mac" >> dist/macOS-Installation-Guide.md
-          echo "2. Extract the ZIP file or mount the DMG" >> dist/macOS-Installation-Guide.md
+          echo "2. Extract the ZIP file" >> dist/macOS-Installation-Guide.md
           echo "3. Drag the app to Applications folder" >> dist/macOS-Installation-Guide.md
           echo "4. Launch from Launchpad or Applications folder" >> dist/macOS-Installation-Guide.md
           echo "" >> dist/macOS-Installation-Guide.md
@@ -90,80 +86,4 @@ jobs:
         with:
           name: installation-guide
           path: dist/macOS-Installation-Guide.md
-
-  # 创建Release的job
-  create-release:
-    needs: build-macos
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-builds
-          path: ./artifacts
-
-      - name: Download installation guide
-        uses: actions/download-artifact@v4
-        with:
-          name: installation-guide
-          path: ./artifacts
-
-      - name: List downloaded artifacts
-        run: |
-          echo "Downloaded artifacts:"
-          ls -la ./artifacts/
-
-      - name: Get version info
-        id: version
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-          else
-            VERSION="v$(date +'%Y.%m.%d')-$(echo $GITHUB_SHA | cut -c1-7)"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: HEVC音频响度调节器 ${{ steps.version.outputs.version }}
-          body: |
-            # HEVC音频响度调节器 macOS版本
-
-            ## 🎯 核心功能
-            - 保持HEVC编码和MP4格式不变
-            - 专业LUFS音频响度分析
-            - 内置FFmpeg，无需额外安装
-            - 支持Intel和Apple Silicon Mac
-
-            ## 📦 下载文件
-            - **Intel Mac**: 下载 `*-x64.zip` 文件
-            - **Apple Silicon Mac**: 下载 `*-arm64.zip` 文件
-            - **安装指南**: 查看 `macOS-Installation-Guide.md`
-
-            ## 🚀 安装步骤
-            1. 下载适合你Mac的文件
-            2. 解压ZIP文件
-            3. 将应用拖拽到应用程序文件夹
-            4. 首次启动可能需要在系统偏好设置中允许运行
-
-            ## 🔧 系统要求
-            - macOS 10.14 (Mojave) 或更高版本
-            - 4GB+ RAM 推荐
-
-            构建时间: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
-            提交: ${{ github.sha }}
-          files: |
-            ./artifacts/*.zip
-            ./artifacts/macOS-Installation-Guide.md
-          draft: false
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# Release创建由build-all-platforms.yml统一处理
